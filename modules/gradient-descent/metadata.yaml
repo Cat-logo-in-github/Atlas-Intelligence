@@ -1,0 +1,26 @@
+title: Gradient Descent
+slug: gradient-descent
+module: ''
+status: seed
+difficulty: beginner
+created: '2026-07-28T13:54:54.774686'
+updated: false
+last_build: '2026-07-31T15:11:54.832928'
+content_hash: 0e043b8e2e61c86e99b08fdb2936eedc2a5837b30414a114b427883ff488af4b
+tags:
+- optimization
+- machine-learning
+related: []
+outputs:
+  website:
+    published: true
+  youtube:
+    published: true
+    url: https://www.youtube.com/watch?v=6K7dWf6texU&list=RD6K7dWf6texU&start_radio=1
+  blog:
+    published: false
+    url: ''
+  notebook:
+    published: false
+  simulation:
+    published: true

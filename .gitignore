@@ -1,0 +1,27 @@
+# Virtual environments
+venv/
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Generated knowledge graph
+graph.json
+
+# Python packaging
+*.egg-info/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS files
+.DS_Store
+
+# Temporary files
+*.log
+
+all the dependenciies.txt
+
+edge-profile/
+atlas/outputs/
