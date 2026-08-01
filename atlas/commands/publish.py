@@ -143,36 +143,8 @@ def module(
 
     
     queue = load_publish_queue()
-    # Substack happens now (human review)
-    typer.echo(
-        "\nOpening Substack draft..."
-    )
-
-    publish_substack(
-        module_name
-    )
-
-
-    answer = typer.confirm(
-        "\nSubstack looks good. Continue with Reddit?"
-    )
-
-    if answer:
-        try:
-            for community in REDDIT_COMMUNITIES:
-                print(f"\nPublishing {module_name} -> r/{community}")
-                publish_reddit(
-                    module_name,
-                    community,
-                )
-        finally:
-            shutdown_browser()
-
-        typer.echo("\n✓ Reddit published")
-
 
     # Queue future LinkedIn + Reddit posts
-
     for day in range(5):
 
         queue.append({
@@ -216,6 +188,33 @@ def module(
     typer.echo(
         "  • Reddit posts : 10 posts"
     )
+
+    # Substack happens now (human review)
+    typer.echo(
+        "\nOpening Substack draft..."
+    )
+
+    publish_substack(
+        module_name
+    )
+
+
+    answer = typer.confirm(
+        "\nSubstack looks good. Continue with Reddit?"
+    )
+
+    if answer:
+        try:
+            for community in REDDIT_COMMUNITIES:
+                print(f"\nPublishing {module_name} -> r/{community}")
+                publish_reddit(
+                    module_name,
+                    community,
+                )
+        finally:
+            shutdown_browser()
+
+        typer.echo("\n✓ Reddit published")
 
     close_edge_page()
     shutdown_browser()
