@@ -589,7 +589,7 @@ def publish_linkedin(
         )
 
 
-        # click_post(page)
+        click_post(page)
 
 
         mark_post_published(

@@ -626,7 +626,7 @@ def publish_reddit_post(module_name: str, community_name: str):
             "Reddit draft ready"
         )
 
-        # click_post(page)
+        click_post(page)
 
         page.wait_for_timeout(
             5000

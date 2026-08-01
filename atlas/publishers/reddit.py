@@ -747,7 +747,7 @@ def publish_reddit(
         )
 
 
-        # click_post(page)
+        click_post(page)
 
 
         print(

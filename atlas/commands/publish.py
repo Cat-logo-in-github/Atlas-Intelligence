@@ -4,6 +4,7 @@ from pathlib import Path
 from atlas.publishers.substack import publish_substack
 from atlas.publishers.linkedln import publish_linkedin
 from atlas.publishers.reddit_post import publish_reddit_post
+from atlas.publishers.github import publish_module
 from atlas.publishers.reddit import publish_reddit
 from atlas.browser.edge import close_edge_page,shutdown_browser
 from atlas.utils.urls import REDDIT_COMMUNITIES
@@ -101,6 +102,32 @@ def reddit(
         close_edge_page()
         shutdown_browser()
 
+@app.command()
+def github(
+    module_name: str
+):
+
+    publish_module(
+        module_name
+    )
+
+
+def load_publish_queue():
+
+    if not PUBLISH_QUEUE.exists():
+        return []
+
+
+    text = PUBLISH_QUEUE.read_text(
+        encoding="utf-8"
+    ).strip()
+
+
+    if not text:
+        return []
+
+
+    return json.loads(text)
 
 @app.command()
 def module(
@@ -109,17 +136,13 @@ def module(
     """
     Schedule and publish a completed module.
     """
+    from atlas.commands.build import build
 
-    if PUBLISH_QUEUE.exists():
-        queue = json.loads(
-            PUBLISH_QUEUE.read_text(
-                encoding="utf-8"
-            )
-        )
-    else:
-        queue = []
+    build()
+    publish_module(module_name)
 
-
+    
+    queue = load_publish_queue()
     # Substack happens now (human review)
     typer.echo(
         "\nOpening Substack draft..."

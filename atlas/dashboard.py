@@ -27,11 +27,16 @@ def load_queue():
     if not QUEUE_PATH.exists():
         return []
 
-    return json.loads(
-        QUEUE_PATH.read_text(
-            encoding="utf-8"
-        )
-    )
+
+    text = QUEUE_PATH.read_text(
+        encoding="utf-8"
+    ).strip()
+
+
+    if not text:
+        return []
+
+    return json.loads(text)
 
 
 def save_queue(queue):
