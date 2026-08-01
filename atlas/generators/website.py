@@ -15,8 +15,6 @@ from atlas.validators.module import (
     mark_module_built,
 )
 
-SITE_PREFIX = "/Atlas-Intelligence"
-
 IGNORE = {
     "run.py",
     "__pycache__",
@@ -263,7 +261,7 @@ def build_simulation_page(module):
                 [
                     f"### {model.name}:\n\n",
                     (
-                        f'<iframe src="{SITE_PREFIX}/static/simulations/{module.slug}/{relative}/index.html" '
+                        f'<iframe src="/static/simulations/{module.slug}/{relative}/index.html" '
                         'width="100%" '
                         'height="700" '
                         'style="border:none;"></iframe>\n\n'
@@ -297,7 +295,7 @@ def build_simulation_page(module):
                 [
                     f"### {file.stem}\n\n",
                     (
-                        f'<iframe src="{SITE_PREFIX}/static/simulations/{module.slug}/{relative}" '
+                        f'<iframe src="/static/simulations/{module.slug}/{relative}" '
                         'width="100%" '
                         'height="700" '
                         'style="border:none;"></iframe>\n\n'
@@ -330,7 +328,7 @@ def build_simulation_page(module):
             lines.extend(
                 [
                     f"### {file.stem}\n\n",
-                    f"![]({SITE_PREFIX}/{module.slug}/simulation/{relative})\n\n"
+                    f"![](/{module.slug}/simulation/{relative})\n\n"
                     .replace("/ ", "/")
                 ]
             )
@@ -358,7 +356,7 @@ def build_simulation_page(module):
 
 
             lines.append(
-                f"- [{file.name}]({SITE_PREFIX}/{module.slug}/simulation/{relative})\n"
+                f"- [{file.name}](/{module.slug}/simulation/{relative})\n"
                 .replace("/ ", "/")
             )
 
