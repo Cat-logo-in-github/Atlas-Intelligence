@@ -94,13 +94,13 @@ def build():
             )
             continue
 
-        generate_all(module)
+        # generate_all(module.slug)
 
         if not module.website_enabled:
             append_quiz(module)
 
         if module.simulation_enabled:
-            generate_simulation(module)
+            generate_simulation(module.slug)
             run_simulation(module)
 
     

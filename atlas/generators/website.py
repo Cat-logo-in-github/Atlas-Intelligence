@@ -133,6 +133,9 @@ def copy_simulation(module):
                 relative
             )
 
+        elif file.suffix.lower() == ".html":
+            target = (model_destination / relative)
+
         else:
 
             target = (
@@ -292,7 +295,7 @@ def build_simulation_page(module):
                 [
                     f"\t### {file.stem}\n\n",
                     (
-                        f'<iframe src="/{module.slug}/simulation/{relative}" '
+                        f'<iframe src="/static/simulations/{module.slug}/{relative}" '
                         'width="100%" '
                         'height="700" '
                         'style="border:none;"></iframe>\n\n'
