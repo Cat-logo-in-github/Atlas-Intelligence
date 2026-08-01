@@ -2,12 +2,12 @@
 configuration:
   pageTitle: Quartz 5
   pageTitleSuffix: ""
-  enableSPA: true
+  enableSPA: false
   enablePopovers: true
   analytics:
     provider: plausible
   locale: en-US
-  baseUrl: https://cat-logo-in-github.github.io/Atlas-Intelligence
+  baseUrl: cat-logo-in-github.github.io/Atlas-Intelligence
   ignorePatterns:
     - private
     - templates
