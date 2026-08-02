@@ -9,6 +9,7 @@ IGNORED_FILES = {
 
 IGNORED_DIRS = {
     "__pycache__",
+    "generated",
 }
 
 

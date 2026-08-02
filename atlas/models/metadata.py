@@ -8,17 +8,26 @@ class OutputConfig:
 
     published: bool = False
     url: str = ""
+    build: bool = False
 
 
 
 @dataclass
 class Outputs:
 
+    quiz: OutputConfig = field(
+        default_factory=OutputConfig
+    )
+
     website: OutputConfig = field(
         default_factory=OutputConfig
     )
 
     youtube: OutputConfig = field(
+        default_factory=OutputConfig
+    )
+
+    instagram: OutputConfig = field(
         default_factory=OutputConfig
     )
 
@@ -92,6 +101,13 @@ class Metadata:
 
         outputs = Outputs(
 
+            quiz=OutputConfig(
+                **raw_outputs.get(
+                    "quiz",
+                    {}
+                )
+            ),
+
             website=OutputConfig(
                 **raw_outputs.get(
                     "website",
@@ -102,6 +118,13 @@ class Metadata:
             youtube=OutputConfig(
                 **raw_outputs.get(
                     "youtube",
+                    {}
+                )
+            ),
+
+            instagram=OutputConfig(
+                **raw_outputs.get(
+                    "instagram",
                     {}
                 )
             ),

@@ -536,6 +536,11 @@ def build_external_links(module):
             f"- [YouTube]({outputs.youtube.url})"
         )
 
+    if outputs.instagram.published and outputs.instagram.url:
+        links.append(
+            f"- [Instagram]({outputs.instagram.url})"
+        )
+
     if outputs.blog.published and outputs.blog.url:
         links.append(
             f"- [Blog]({outputs.blog.url})"

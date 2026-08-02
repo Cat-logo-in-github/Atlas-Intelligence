@@ -3,7 +3,7 @@ import typer
 from atlas.models.module import Module
 from atlas.utils.paths import MODULES_DIR
 from atlas.llm.ollama import generate
-
+from atlas.validators.module import mark_output_published
 
 
 def generate_quiz(
@@ -150,4 +150,9 @@ Repeat for all questions.
 
     print(
         f" ✓ Generated {destination}"
+    )
+
+    mark_output_published(
+        module,
+        "quiz"
     )

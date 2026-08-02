@@ -11,6 +11,8 @@ from atlas.validators.notebook import (
     notebook_has_content
 )
 
+from atlas.validators.hash import update_module_hash
+
 
 
 def file_has_content(
@@ -114,6 +116,19 @@ def check(
         typer.echo(
             f"\n{module.slug}"
         )
+
+
+        changed = update_module_hash(module)
+
+        if changed:
+            typer.echo(
+                "  ⚡ Content changed → marked updated"
+            )
+
+        else:
+            typer.echo(
+                "  ✓ content hash"
+            )
 
 
         ready = True

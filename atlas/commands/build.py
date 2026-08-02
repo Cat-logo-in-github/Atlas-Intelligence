@@ -9,7 +9,7 @@ from atlas.generators.website import (
 )
 
 from atlas.commands.generate import (
-    generate_all
+    generate_quiz,
 )
 
 from atlas.generators.simulation import (
@@ -28,44 +28,7 @@ from atlas.validators.module import (
     module_needs_build
 )
 
-from pathlib import Path
-
-
-def append_quiz(module):
-
-    quiz = module.generated / "quiz.md"
-
-    if not quiz.exists():
-        return
-
-
-    knowledge = module.knowledge
-
-
-    quiz_text = quiz.read_text(
-        encoding="utf-8"
-    ).strip()
-
-
-    knowledge_text = knowledge.read_text(
-        encoding="utf-8"
-    ).rstrip()
-
-
-    # Prevent accidental duplicate appends
-    if "## Quiz" in knowledge_text:
-        return
-
-
-    with knowledge.open(
-        "a",
-        encoding="utf-8"
-    ) as f:
-
-        f.write("\n\n")
-        f.write("## Quiz\n\n")
-        f.write(quiz_text)
-        f.write("\n")
+from atlas.utils.quiz import append_quiz
 
 def build():
     """
@@ -96,10 +59,11 @@ def build():
 
         # generate_all(module.slug)
 
-        if not module.website_enabled:
+        if not module.quiz_enabled:
+            generate_quiz(module.slug)
             append_quiz(module)
 
-        if module.simulation_enabled:
+        if module.simulation_enabled and module.simulation_needs_build:
             generate_simulation(module.slug)
             run_simulation(module)
 

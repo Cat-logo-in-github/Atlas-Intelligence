@@ -115,6 +115,8 @@ tags: []
 related: []
 
 outputs:
+  quiz:
+    published: false
 
   website:
     published: false
@@ -122,6 +124,10 @@ outputs:
   youtube:
     published: false
     url: ""
+
+  instagram:
+      published: false
+      url: ""
 
   blog:
     published: false
@@ -132,6 +138,7 @@ outputs:
 
   simulation:
     published: false
+    build: false
 """,
         encoding="utf-8"
     )

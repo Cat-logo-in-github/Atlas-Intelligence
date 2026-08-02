@@ -9,7 +9,6 @@ from atlas.browser.edge import shutdown_browser
 
 app = typer.Typer(help="make content for publishing: Images, Blog, Structured Data")
 
-
 @app.command()
 def blog(
     module_name: str

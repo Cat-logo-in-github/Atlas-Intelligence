@@ -32,6 +32,10 @@ from atlas.make.liimages import (
     generate_module_liimages
 )
 
+from atlas.models.module import Module
+from atlas.utils.paths import MODULES_DIR
+from atlas.utils.quiz import append_quiz
+
 
 def generate_all(
     slug: str,
@@ -42,6 +46,10 @@ def generate_all(
         help="Overwrite existing generated files",
     ),
 ):
+
+    module = Module(
+        MODULES_DIR / slug
+    )
 
     generate_metadata(
         slug
@@ -57,10 +65,18 @@ def generate_all(
         force=force
     )
 
-    generate_quiz(
-        slug,
-        force=force
-    )
+
+    if not module.quiz_enabled or force:
+        generate_quiz(
+            slug,
+            force=force
+        )
+        append_quiz(module)
+
+    else:
+        print(
+            f" O {module.title}/quiz.md already generated"
+        )
 
     generate_posts(
         slug,

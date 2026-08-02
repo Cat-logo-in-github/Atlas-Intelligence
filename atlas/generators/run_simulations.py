@@ -1,7 +1,7 @@
 from pathlib import Path
 import subprocess
 import sys
-
+from atlas.validators.module import mark_output_built
 
 def run_simulation(module):
 
@@ -30,6 +30,10 @@ def run_simulation(module):
             ],
             cwd=simulation,
             check=True
+        )
+        mark_output_built(
+                module,
+                "simulation"
         )
 
     except subprocess.CalledProcessError:

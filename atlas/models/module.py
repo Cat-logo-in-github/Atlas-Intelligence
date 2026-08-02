@@ -56,6 +56,14 @@ class Module:
         return self.outputs.website.published
 
     @property
+    def quiz_output(self):
+        return self.outputs.quiz
+
+    @property
+    def quiz_enabled(self):
+        return self.outputs.quiz.published
+
+    @property
     def youtube_output(self):
         return self.outputs.youtube
 
@@ -66,6 +74,20 @@ class Module:
     @property
     def youtube_url(self):
         return self.outputs.youtube.url
+
+    @property
+    def instagram_output(self):
+        return self.outputs.instagram
+
+
+    @property
+    def instagram_enabled(self):
+        return self.outputs.instagram.published
+
+
+    @property
+    def instagram_url(self):
+        return self.outputs.instagram.url
 
     @property
     def blog_output(self):
@@ -94,6 +116,10 @@ class Module:
     @property
     def simulation_enabled(self):
         return self.outputs.simulation.published
+
+    @property
+    def simulation_needs_build(self):
+        return self.outputs.simulation.build
 
     @property
     def knowledge(self):
