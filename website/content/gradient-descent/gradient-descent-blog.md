@@ -50,6 +50,8 @@ The algorithm never knows where the minimum is—it only knows which direction i
 
 ## From Error to Improvement
 
+<iframe src="/static/simulations/gradient-descent/function_gradient_descent.html" width="100%" height="700" style="border:none;"></iframe>
+
 Every machine learning model makes predictions.
 
 Some predictions are correct.
