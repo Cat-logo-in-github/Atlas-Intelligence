@@ -406,3 +406,4 @@ Although biological learning likely relies on different mechanisms than backprop
 ## External Links
 
 - [YouTube](https://www.youtube.com/watch?v=6K7dWf6texU&list=RD6K7dWf6texU&start_radio=1)
+- [Instagram](https://www.instagram.com/p/Cw5g0k7v8jG/)
