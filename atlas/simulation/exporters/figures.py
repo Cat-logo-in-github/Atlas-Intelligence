@@ -4,7 +4,10 @@ import matplotlib.figure
 import plotly.graph_objects as go
 
 
-def export_figures(simulation):
+def export_figures(
+    simulation,
+    export: bool = True,
+):
 
     for item in simulation.figures:
 
@@ -15,20 +18,24 @@ def export_figures(simulation):
             figure,
             matplotlib.figure.Figure
         ):
+
             export_matplotlib(
                 figure,
                 name,
-                simulation.output
+                simulation.output,
+                export=export,
             )
 
         elif isinstance(
             figure,
             go.Figure
         ):
+
             export_plotly(
                 figure,
                 name,
-                simulation.output
+                simulation.output,
+                export=export,
             )
 
         else:
@@ -38,12 +45,19 @@ def export_figures(simulation):
             )
 
 
-
 def export_matplotlib(
     figure,
     name: str,
-    output: Path
+    output: Path,
+    export: bool = True,
 ):
+
+    if not export:
+
+        figure.show()
+
+        return
+
 
     png_path = (
         output /
@@ -75,12 +89,19 @@ def export_matplotlib(
     )
 
 
-
 def export_plotly(
     figure,
     name: str,
-    output: Path
+    output: Path,
+    export: bool = True,
 ):
+
+    if not export:
+
+        figure.show()
+
+        return
+
 
     html_path = (
         output /

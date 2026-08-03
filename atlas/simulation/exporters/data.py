@@ -159,7 +159,10 @@ new DataTable(
 
 
 
-def export_datasets(simulation):
+def export_datasets(
+    simulation,
+    export: bool = True,
+):
 
     for item in simulation.datasets:
 
@@ -170,6 +173,17 @@ def export_datasets(simulation):
         df = normalize_data(
             data
         )
+
+
+        if not export:
+
+            print(
+                f"\n=== {name} ==="
+            )
+
+            print(df)
+
+            continue
 
 
         output = simulation.output
@@ -191,4 +205,9 @@ def export_datasets(simulation):
             df,
             output / f"{name}.html",
             name
+        )
+
+
+        print(
+            f"✓ Exported dataset: {name}"
         )

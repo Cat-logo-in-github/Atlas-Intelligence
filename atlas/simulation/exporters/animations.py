@@ -240,7 +240,10 @@ def build_plotly_animation(data):
 
 
 
-def export_animations(simulation):
+def export_animations(
+    simulation,
+    export: bool = True,
+):
 
     for item in simulation.animations:
 
@@ -250,6 +253,18 @@ def export_animations(simulation):
         data = normalize_animation(
             animation
         )
+
+
+        fig = build_plotly_animation(
+            data
+        )
+
+
+        if not export:
+
+            fig.show()
+
+            continue
 
 
         output = simulation.output
@@ -266,11 +281,6 @@ def export_animations(simulation):
 
             encoding="utf-8"
 
-        )
-
-
-        fig = build_plotly_animation(
-            data
         )
 
 

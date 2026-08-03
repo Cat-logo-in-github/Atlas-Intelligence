@@ -1,7 +1,7 @@
 from pathlib import Path
 import json
 import shutil
-
+import webbrowser
 
 
 def validate_model(path: Path):
@@ -49,7 +49,10 @@ def copy_directory(
     )
 
 
-def export_models(simulation):
+def export_models(
+    simulation,
+    export: bool = True,
+):
 
     for item in simulation.models:
 
@@ -63,6 +66,21 @@ def export_models(simulation):
         validate_model(
             model
         )
+
+
+        if not export:
+
+            index = (
+                model /
+                "index.html"
+            )
+
+
+            webbrowser.open(
+                index.resolve().as_uri()
+            )
+
+            continue
 
 
         output = simulation.output
@@ -103,4 +121,9 @@ def export_models(simulation):
             ),
 
             encoding="utf-8"
+        )
+
+
+        print(
+            f"✓ Exported model: {name}"
         )

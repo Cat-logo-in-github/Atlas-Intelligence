@@ -6,6 +6,7 @@ from atlas.commands.build import build
 from atlas.commands.check import check
 from atlas.commands.list import list_modules
 from atlas.commands.version import version
+from atlas.commands.run import run
 
 
 app = typer.Typer(
@@ -42,6 +43,8 @@ app.command()(create)
 app.command()(build)
 
 app.command()(check)
+
+app.command()(run)
 
 app.command("list")(list_modules)
 

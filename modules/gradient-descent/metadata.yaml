@@ -4,9 +4,9 @@ module: ''
 status: seed
 difficulty: beginner
 created: '2026-07-28T13:54:54.774686'
-updated: false
+updated: true
 last_build: '2026-08-02T18:56:14.321062'
-content_hash: 928409bf9363b592b3aeedaa5957a0d92c72c4709c58c3562eff1ec84084e6ae
+content_hash: 6c5f3a250ee9c386e012ae160c5ad19810f9549c8bf9cd45ca26a523d726c576
 tags:
 - optimization
 - machine-learning

@@ -14,14 +14,15 @@ from atlas.simulation.exporters import (
     export_models,
 )
 
+from pathlib import Path
+from typing import Optional
 
 class Simulation:
 
     def __init__(
         self,
-        output: Path
+        output: Optional[Path] = None
     ):
-
         self.output = output
 
         self.current_file = None
@@ -302,6 +303,33 @@ class Simulation:
                 "object": model,
                 "name": name
             }
+        )
+
+    def preview(self):
+
+        export_figures(
+            self,
+            export=False
+        )
+
+        export_graphs(
+            self,
+            export=False
+        )
+
+        export_animations(
+            self,
+            export=False
+        )
+
+        export_datasets(
+            self,
+            export=False
+        )
+
+        export_models(
+            self,
+            export=False
         )
 
 

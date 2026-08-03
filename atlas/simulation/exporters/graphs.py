@@ -316,7 +316,10 @@ def build_plotly_graph(data):
     return fig
 
 
-def export_graphs(simulation):
+def export_graphs(
+    simulation,
+    export: bool = True,
+):
 
     for item in simulation.graphs:
 
@@ -325,32 +328,30 @@ def export_graphs(simulation):
 
         data = normalize_graph(graph)
 
+        fig = build_plotly_graph(data)
+
+        if not export:
+            fig.show()
+            continue
+
         (simulation.output / f"{name}.json").write_text(
-            json.dumps(
-                data,
-                indent=2
-            ),
+            json.dumps(data, indent=2),
             encoding="utf-8"
         )
-
-        fig = build_plotly_graph(data)
 
         fig.write_html(
             simulation.output / f"{name}.html"
         )
 
         try:
-
             fig.write_image(
                 simulation.output / f"{name}.png"
             )
-
             fig.write_image(
                 simulation.output / f"{name}.svg"
             )
 
         except Exception as e:
-
             print(
                 f"⚠ Could not render static graph images: {e}"
             )

@@ -8,6 +8,7 @@ from atlas.publishers.linkedln import publish_linkedin
 from atlas.publishers.reddit_post import publish_reddit_post
 from atlas.browser.edge import shutdown_browser
 from atlas.utils.urls import REDDIT_COMMUNITIES
+from atlas.utils.sync import sync
 
 QUEUE_PATH = Path("atlas/outputs/publish_queue.json")
 
@@ -87,7 +88,60 @@ def show_dashboard():
     )
 
     print(
+        "How are you doing today? Ready to publish?\n"
+    )
+
+    print(
         "──────────────────────────────────────────"
+    )
+
+    status = sync()
+
+
+    print(
+        """
+Atlas Status
+──────────────────────────────────────────
+"""
+    )
+
+
+    print(
+        f"Modules\n"
+        f" ✓ {status.synced} synced\n"
+        f" ⚡ {len(status.changed)} changed\n"
+        f" ⚠ {len(status.incomplete)} incomplete\n"
+    )
+
+
+    if status.changed:
+
+        print(
+            "\nChanged\n"
+        )
+
+        for module in status.changed:
+
+            print(
+                f" • {module.slug}"
+            )
+
+
+    if status.incomplete:
+
+        print(
+            "\nNeeds attention\n"
+        )
+
+        for module in status.incomplete:
+
+            print(
+                f" • {module.slug}"
+            )
+
+
+    print(
+        "\n──────────────────────────────────────────"
     )
 
     queue = load_queue()
@@ -155,12 +209,7 @@ No Publications due today.
 
 
     print(
-        "\nGood afternoon.\n"
-    )
-
-
-    print(
-        "Publishing Queue\n"
+        "\nToday's Publications\n"
     )
 
 
