@@ -38,6 +38,8 @@ def mark_module_built(module):
         encoding="utf-8"
     )
 
+    print(f"✓ Module '{module.metadata.title}' marked as built")
+
 def mark_output_published(
     module,
     output,

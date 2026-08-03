@@ -76,11 +76,6 @@ def run(
     )
 
 
-    simulation.set_context(
-        simulation_file
-    )
-
-
     try:
 
         load_simulation(
