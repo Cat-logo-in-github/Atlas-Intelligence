@@ -2,7 +2,7 @@
 
 CLI:
 
-![alt text](image-4.png)
+![alt text](images/image-4.png)
 
 # Why Atlas?
 
@@ -175,14 +175,14 @@ Generated content contains:
 - Interactive content
 
 
-# Installation
+# Installation: Note this repo works best on Windows machines. Others may need additional configuration that has not been provided
 
 Clone the repository:
 
 ```bash
-git clone YOUR_REPOSITORY_URL
+git clone https://github.com/Cat-logo-in-github/Atlas-Intelligence
 
-cd atlas
+cd directory_name
 ```
 
 Create a virtual environment:
@@ -211,6 +211,13 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
+You'll also need to install Ollama Qwen 2.5b for the generation pipeline. Alternatively, you can change it to use your own model. But to just try as is refer to:
+
+https://ai-ollama.github.io/qwen-2-5.html
+
+Ensure Ollama is running and the model is listening to port 11434
+
+Further details will be shared later
 ---
 
 # Quick Start
@@ -308,19 +315,19 @@ The goal is building a personal intelligence system that turns your knowledge in
 
 Completed Module Structure:
 
-![alt text](image.png)
+![alt text](images/image.png)
 
 Website Index:
 
-![alt text](image-1.png)
+![alt text](images/image-1.png)
 
 Blog page with Simulations (embedding knowledge needed):
 
-![alt text](image-2.png)
+![alt text](images/image-2.png)
 
 Simulation Page:
 
-![alt text](image-3.png)
+![alt text](images/image-3.png)
 
 
 Generated posts:
