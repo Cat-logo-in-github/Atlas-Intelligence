@@ -1,0 +1,1336 @@
+# Stage 1 — Temporal U-Net + Transformer (Understanding the support pack)
+
+This repository contains the inference and supporting code for a cell-tracking pipeline built around a **3D temporal U-Net detector** followed by a **node-level transformer for temporal linking**.
+
+The important idea is that the model does **not** directly predict complete cell tracks.
+
+Instead, it solves the problem in two stages:
+
+1. **Where are the cells?**
+   The temporal U-Net processes a short sequence of 3D microscopy frames and produces dense detection logits together with spatial feature maps.
+
+2. **Which detected cell belongs to which cell in the next frame?**
+   The transformer receives features sampled at the detected cell locations and predicts pairwise probabilities between cells in consecutive frames.
+
+Those predictions are then converted into a graph. Optional global optimization can be applied to the graph before it is saved as a `.geff` tracking result.
+
+---
+
+## 1. High-level picture
+
+A useful way to think about the pipeline is:
+
+```text
+                    Input microscopy video
+                         (T, Z, Y, X)
+                               │
+                               ▼
+                     Zarr dataset + metadata
+                               │
+                               ▼
+                    Frame loading / parsing
+                               │
+                               ▼
+                     Quantile normalization
+                               │
+                               ▼
+                Spatial downsampling (Z/Y/X)
+                               │
+                               ▼
+                  ┌────────────────────────┐
+                  │   TemporalUNet3D       │
+                  │                        │
+                  │  3D spatial features   │
+                  │  + detection logits    │
+                  └───────────┬────────────┘
+                              │
+                 ┌────────────┴─────────────┐
+                 │                          │
+                 ▼                          ▼
+          Detection logits             U-Net features
+                 │                          │
+                 ▼                          │
+          Local-max detection              │
+                 │                          │
+                 ▼                          │
+             Cell nodes ◄───────────────────┘
+                 │
+                 ▼
+        Position + U-Net node features
+                 │
+                 ▼
+        Node Transformer / Edge Predictor
+                 │
+                 ▼
+        Pairwise temporal edge scores
+                 │
+                 ▼
+          Edge filtering / constraints
+                 │
+                 ▼
+             Tracking graph
+                 │
+                 ▼
+          Optional ILP optimization
+                 │
+                 ▼
+              .geff output
+```
+
+[Figure: End-to-end pipeline diagram showing the flow from Zarr microscopy data through preprocessing, TemporalUNet3D, cell detection, transformer-based linking, graph construction, optional ILP optimization, and `.geff` output](assets/Pipeline-detailed.png)
+
+The key architectural separation is:
+
+> **The U-Net finds candidate cells; the transformer decides how those cells are connected through time.**
+
+This makes the system easier to reason about than a model that attempts to predict an entire tracking graph directly.
+
+---
+
+# 2. What goes into the model?
+
+The source dataset is stored as a **Zarr** image.
+
+Conceptually, the image is a four-dimensional array:
+
+```text
+(T, Z, Y, X)
+```
+
+where:
+
+* `T` = time / frame
+* `Z` = depth
+* `Y` = image height
+* `X` = image width
+
+For example, a short temporal window might look like:
+
+```text
+Frame 0       Frame 1       Frame 2       ...
+┌────────┐    ┌────────┐    ┌────────┐
+│ 3D     │    │ 3D     │    │ 3D     │
+│ volume │    │ volume │    │ volume │
+└────────┘    └────────┘    └────────┘
+      \           |           /
+       \          |          /
+        └──── Temporal U-Net ────┘
+```
+
+The model does not process the entire video at once.
+
+Instead, it uses a **sliding temporal window**.
+
+With:
+
+```python
+window_size = 2
+```
+
+the model processes:
+
+```text
+(frame 0, frame 1)
+(frame 1, frame 2)
+(frame 2, frame 3)
+...
+```
+
+More generally, for a window of `W` frames, the prediction code uses a stride of:
+
+```text
+W - 1
+```
+
+This ensures that every consecutive frame pair is covered while allowing the U-Net features from a temporal window to be reused for edge prediction.
+
+---
+
+# 3. Dataset parsing and metadata
+
+The main dataset entry point is:
+
+```python
+open_dataset(...)
+```
+
+in:
+
+```text
+biohub_tracking/io.py
+```
+
+The function understands a dataset as a pair of files:
+
+```text
+dataset_name.zarr
+dataset_name.geff
+```
+
+The `.zarr` contains the microscopy image.
+
+The `.geff` contains tracking information when ground-truth or previously generated tracks are available.
+
+The loader also reads metadata from the Zarr attributes.
+
+One particularly important piece of metadata is the physical voxel scale:
+
+```python
+DEFAULT_SCALE = (1.625, 0.40625, 0.40625)
+```
+
+which represents:
+
+```text
+(Z, Y, X) = (1.625 µm, 0.40625 µm, 0.40625 µm)
+```
+
+The important consequence is that the data is **anisotropic**.
+
+One voxel in Z represents much more physical distance than one voxel in Y/X.
+
+Therefore, operations involving physical distances—such as detection suppression or edge distances—cannot blindly treat Z, Y, and X as equivalent voxel units.
+
+---
+
+# 4. Image normalization
+
+Raw microscopy intensities are not necessarily on a stable scale across datasets.
+
+The pipeline therefore performs quantile-based normalization.
+
+The basic transformation is:
+
+```text
+normalized = (image - q_low) / (q_high - q_low + ε)
+```
+
+followed by clipping.
+
+The production inference code uses the precomputed dataset statistics stored in:
+
+```text
+image_statistics.quantiles
+```
+
+and specifically checks for:
+
+```text
+0.001
+0.999
+```
+
+So the effective normalization is approximately:
+
+```text
+1st percentile / 99.9th percentile
+        │
+        ▼
+   linear scaling
+        │
+        ▼
+   clamp to ≥ 0
+        │
+        ▼
+   clamp to [0, 4]
+```
+
+This is important because the model was trained under this normalization convention.
+
+Using a different normalization at inference time changes the input distribution seen by the network.
+
+---
+
+# 5. Spatial downsampling
+
+The prediction configuration contains:
+
+```python
+downsample = (1, 4, 4)
+```
+
+This means:
+
+```text
+Z : keep every voxel
+Y : keep every 4th voxel
+X : keep every 4th voxel
+```
+
+So the model operates on a lower-resolution XY representation while retaining the original Z sampling.
+
+Conceptually:
+
+```text
+Original XY
+
+████████████████████
+████████████████████
+████████████████████
+████████████████████
+
+          ↓ 4× spatial stride
+
+Model XY
+
+█    █    █    █
+█    █    █    █
+█    █    █    █
+```
+
+This reduces the spatial computational cost substantially.
+
+The prediction code keeps track of this downsampling factor so that detected coordinates can eventually be mapped back to the original image coordinate system.
+
+---
+
+# 6. TemporalUNet3D
+
+The central image-processing model is:
+
+```python
+TemporalUNet3D
+```
+
+with the saved configuration:
+
+```python
+{
+    "unet_out_channels": 32,
+    "unet_layers": [32, 64, 128],
+    "downsample": [1, 4, 4],
+    "window_size": 2,
+    "pool_kernel_um": 5.0,
+}
+```
+
+The U-Net is responsible for turning the raw image sequence into useful spatial representations.
+
+It produces two important outputs:
+
+```python
+unet_out, det_logits = model.encode(imgs)
+```
+
+Conceptually:
+
+```text
+Input
+(W, Z, Y, X)
+      │
+      ▼
+┌───────────────────────┐
+│    Temporal U-Net     │
+│                       │
+│ encoder → bottleneck  │
+│          → decoder    │
+└──────────┬────────────┘
+           │
+      ┌────┴─────┐
+      ▼          ▼
+ U-Net feature  Detection
+    volume       logits
+```
+
+The **feature volume** is not itself a list of cells.
+
+It is a dense feature representation covering the spatial image.
+
+The **detection logits** are also dense: each spatial location receives a value indicating how strongly that location resembles a cell center.
+
+This distinction is fundamental.
+
+> The U-Net produces a dense field.
+> The tracking pipeline later turns that field into discrete cell nodes.
+
+[Figure: Example 3D microscopy volume alongside the corresponding U-Net feature volume and detection-logit volume, illustrating that the network initially produces dense spatial fields rather than explicit cell objects](assets/raw_unet_features_detection.png)
+
+---
+
+# 7. Detection: turning logits into cell nodes
+
+For every frame, the detector produces a logit volume:
+
+```text
+(Z, Y, X)
+```
+
+The logits are converted to probabilities using:
+
+```python
+torch.sigmoid(logits)
+```
+
+A location becomes a candidate cell when:
+
+1. it is a local maximum, and
+2. its sigmoid probability exceeds the detection threshold.
+
+The local-maximum operation is implemented using 3D max pooling:
+
+```python
+pooled = F.max_pool3d(...)
+is_peak = (logits == pooled) & (torch.sigmoid(logits) > threshold)
+```
+
+This is effectively a 3D non-maximum suppression step.
+
+Instead of returning every voxel that looks cell-like, the detector returns isolated peaks.
+
+The result for one frame is:
+
+```text
+[t, z, y, x]
+```
+
+for every detected cell.
+
+For example:
+
+```text
+t   z   y    x
+0   4   31   82
+0   5   74   51
+0   7   19   93
+...
+```
+
+These rows become the **nodes of the future tracking graph**.
+
+---
+
+# 8. Why the detection threshold matters
+
+The detector is trained from sparse annotations, so a low sigmoid threshold does not necessarily correspond to a clean "cell exists" probability.
+
+For this reason, the prediction CLI defaults to a relatively high detection threshold:
+
+```python
+--det-threshold 0.99
+```
+
+The threshold is therefore better understood as a **precision/recall control knob**.
+
+Lower threshold:
+
+```text
+more candidate cells
+        ↓
+higher recall
+        ↓
+potentially more false positives
+```
+
+Higher threshold:
+
+```text
+fewer candidate cells
+        ↓
+higher precision
+        ↓
+potentially missed cells
+```
+
+This detection stage is separate from temporal linking.
+
+A cell that is never detected cannot subsequently be recovered by the transformer.
+
+---
+
+# 9. Detection TTA
+
+The inference code optionally performs test-time augmentation for detection.
+
+It evaluates:
+
+```text
+original
+flip X
+flip Y
+flip X + Y
+```
+
+and averages the resulting logits.
+
+Importantly, Z is not flipped.
+
+The reason is the strong anisotropy of the microscopy data: Z has substantially coarser physical resolution than X/Y.
+
+Conceptually:
+
+```text
+                  Original
+                     │
+          ┌──────────┼──────────┐
+          ▼          ▼          ▼
+        flip X     flip Y    flip XY
+          │          │          │
+          └──────────┼──────────┘
+                     ▼
+               average logits
+                     │
+                     ▼
+             final detection map
+```
+
+This is applied to the detection output, not as a completely separate tracking model.
+
+---
+
+# 10. Physical-scale detection suppression
+
+The pooling kernel used for local-max detection is not hard-coded purely in voxel units.
+
+The code starts with a physical suppression distance:
+
+```python
+pool_kernel_um
+```
+
+and converts it into a per-axis voxel kernel using the actual voxel size.
+
+For example, with anisotropic voxels:
+
+```text
+voxel size:
+Z = 1.625 µm
+Y = 0.40625 µm
+X = 0.40625 µm
+```
+
+a physical distance must translate into different numbers of voxels along each axis.
+
+This prevents the detector from accidentally treating:
+
+```text
+1 Z voxel == 1 X voxel
+```
+
+which would be physically incorrect.
+
+---
+
+# 11. From detections to node features
+
+At this point we have discrete detections:
+
+```text
+Frame t:
+    cell A
+    cell B
+    cell C
+    ...
+
+Frame t+1:
+    cell D
+    cell E
+    cell F
+    ...
+```
+
+But the transformer needs more than coordinates.
+
+For every detected cell, the pipeline extracts features from the U-Net feature volume at that cell's location.
+
+This is performed by:
+
+```python
+model._index_features(...)
+```
+
+Conceptually:
+
+```text
+Dense U-Net feature volume
+            │
+            │ sample at
+            ▼
+       cell coordinate
+            │
+            ▼
+      node feature vector
+```
+
+So each detected cell becomes a compact representation containing information learned from its local 3D image context.
+
+---
+
+# 12. Positional features
+
+The transformer also receives explicit positional information.
+
+The code uses:
+
+```python
+extract_pos_features(...)
+```
+
+to encode the cell's position in the temporal window.
+
+The position contains:
+
+```text
+time
+Z
+Y
+X
+```
+
+which are transformed into learned/useful positional features.
+
+This gives the transformer two complementary sources of information:
+
+### Appearance / morphology
+
+Obtained from the U-Net:
+
+```text
+"What does this cell look like?"
+```
+
+### Position
+
+Obtained from the coordinate features:
+
+```text
+"Where is this cell?"
+```
+
+The transformer can therefore reason about whether a candidate cell in frame `t+1` is a plausible continuation of a cell in frame `t`.
+
+---
+
+# 13. The node transformer
+
+The transformer portion is responsible for the temporal association problem.
+
+For two consecutive frames:
+
+```text
+Frame t                    Frame t+1
+
+ A ──────────────────────── ? ── D
+ B ──────────────────────── ? ── E
+ C ──────────────────────── ? ── F
+```
+
+the model produces a matrix of raw edge logits:
+
+```text
+(n_src, n_tgt)
+```
+
+where:
+
+```text
+row    = source cell
+column = target cell
+value  = compatibility score
+```
+
+For example:
+
+```text
+             target
+           D      E      F
+        ┌──────┬──────┬──────┐
+A       │ 2.1  │ -1.2 │ 0.4  │
+        ├──────┼──────┼──────┤
+B       │ -0.8 │ 3.7  │ 0.1  │
+        ├──────┼──────┼──────┤
+C       │ 0.2  │ -0.4 │ 4.2  │
+        └──────┴──────┴──────┘
+```
+
+These are **not yet graph edges**.
+
+They are model scores that still need to be converted into probabilities and filtered.
+
+---
+
+# 14. Edge probability
+
+The default configuration uses:
+
+```python
+edge_activation = "softmax"
+```
+
+The raw edge scores are therefore normalized with a softmax.
+
+This makes the competing target cells meaningful relative to one another.
+
+Conceptually:
+
+```text
+raw compatibility scores
+          │
+          ▼
+       softmax
+          │
+          ▼
+probability of candidate links
+          │
+          ▼
+      thresholding
+```
+
+The alternative is sigmoid activation, where every pair receives an independent probability.
+
+The two interpretations are different:
+
+### Softmax
+
+```text
+"Which target is this source most compatible with?"
+```
+
+### Sigmoid
+
+```text
+"How plausible is this source-target pair independently?"
+```
+
+The current inference configuration uses softmax.
+
+---
+
+# 15. Edge filtering
+
+After probabilities are computed, candidate edges below:
+
+```python
+threshold = 0.5
+```
+
+are discarded.
+
+The remaining candidates are sorted from highest probability to lowest.
+
+The code then applies local graph constraints.
+
+By default, when ILP is disabled:
+
+```python
+max_parents_per_node = 1
+max_children_per_node = 2
+```
+
+This corresponds to the biological tracking assumption that:
+
+* a cell normally has at most one parent;
+* a cell can have up to two children, allowing division.
+
+So a predicted graph can represent:
+
+```text
+normal continuation:
+
+      A
+      │
+      ▼
+      B
+```
+
+and division:
+
+```text
+      A
+     / \
+    ▼   ▼
+    B   C
+```
+
+but not arbitrary many-to-many connections.
+
+---
+
+# 16. Edge distance
+
+Every accepted edge also stores a spatial distance:
+
+```python
+edge_dist
+```
+
+computed from the source and target coordinates.
+
+The resulting edge contains conceptually:
+
+```text
+source
+target
+edge_prob
+edge_dist
+```
+
+The probability answers:
+
+> How strongly does the model believe these two nodes should be connected?
+
+The distance answers:
+
+> How far apart are these two detected cells in coordinate space?
+
+These are stored separately because they describe different properties of the predicted relationship.
+
+---
+
+# 17. Sliding-window inference
+
+The entire video is processed through overlapping temporal windows.
+
+For:
+
+```text
+W = 2
+```
+
+the sequence is:
+
+```text
+[0,1]
+   [1,2]
+      [2,3]
+         [3,4]
+```
+
+For larger windows, the same principle applies.
+
+The important implementation detail is that the code maintains registries for:
+
+```python
+seen_frames
+seen_pairs
+coord_offset
+```
+
+This prevents the same frame's detections or the same consecutive frame pair from being processed repeatedly.
+
+Thus the temporal window provides context while the final node/edge registry remains global to the video.
+
+[Figure: Sliding-window animation showing frames entering and leaving the Temporal U-Net window, with detections reused and each consecutive frame pair linked exactly once](assets/sliding_window_tracking.mp4)
+
+---
+
+# 18. Coordinate systems
+
+There are several coordinate systems involved, so keeping them separate is important.
+
+### Original image coordinates
+
+The coordinates in the source Zarr image:
+
+```text
+(T, Z, Y, X)
+```
+
+### Downsampled model coordinates
+
+After:
+
+```python
+downsample = (1, 4, 4)
+```
+
+the model sees a reduced Y/X grid.
+
+Detection coordinates initially live in this space.
+
+### Original-resolution output coordinates
+
+At the end of prediction:
+
+```python
+coords[:, 1:] *= ds_arr
+```
+
+so the spatial coordinates are scaled back to the original resolution.
+
+The output graph therefore contains coordinates corresponding to the original image coordinate system.
+
+---
+
+# 19. Why isotropic resampling exists
+
+The repository also contains utilities for explicitly resampling anisotropic microscopy volumes into isotropic voxel space.
+
+This is separate from the default prediction path.
+
+For example:
+
+```python
+resample_image_to_isotropic(...)
+```
+
+can transform:
+
+```text
+Z = 1.625 µm
+Y = 0.40625 µm
+X = 0.40625 µm
+```
+
+into a representation where:
+
+```text
+Z ≈ Y ≈ X
+```
+
+in physical scale.
+
+The corresponding coordinate transformation is handled by:
+
+```python
+rescale_coords_to_isotropic(...)
+rescale_coords_from_isotropic(...)
+```
+
+This is useful when an experiment or model specifically benefits from isotropic geometry.
+
+However, the current Temporal U-Net prediction path does **not** need to isotropically resample the entire volume. It instead works with the native anisotropic data and explicitly accounts for physical scale where necessary.
+
+---
+
+# 20. Building the tracking graph
+
+Once detection nodes and accepted temporal edges have been produced, they are converted into a `tracksdata` graph.
+
+The node contains:
+
+```text
+t
+z
+y
+x
+```
+
+The edge contains:
+
+```text
+edge_prob
+edge_dist
+```
+
+Conceptually:
+
+```text
+                time
+                 →
+    
+        Frame 0       Frame 1       Frame 2
+
+          A ────────── B ────────── D
+           \
+            └───────── C ────────── E
+```
+
+This is the first point where the independent predictions become an actual tracking structure.
+
+The graph is then serialized as:
+
+```text
+*.geff
+```
+
+using:
+
+```python
+save_graph(...)
+```
+
+---
+
+# 21. Optional ILP post-processing
+
+Greedy edge selection is local.
+
+It considers candidates in probability order and accepts an edge if it does not violate the configured parent/child limits.
+
+This is simple and fast, but it does not necessarily produce the globally best tracking graph.
+
+The optional ILP stage addresses this.
+
+When:
+
+```bash
+--use-ilp
+```
+
+is enabled, the graph is passed to:
+
+```python
+td.solvers.ILPSolver(...)
+```
+
+The solver considers the graph globally while incorporating costs for:
+
+* edge selection
+* track appearance
+* track disappearance
+* divisions
+
+The conceptual difference is:
+
+```text
+Greedy:
+
+edge A looks good → accept
+edge B looks good → accept
+edge C conflicts → reject
+
+
+ILP:
+
+consider many possible edges together
+                │
+                ▼
+       optimize the whole graph
+                │
+                ▼
+       globally consistent tracks
+```
+
+This is why the ILP stage should be thought of as **graph-level post-processing**, rather than another neural-network stage.
+
+---
+
+# 22. Checkpoint structure
+
+The supplied checkpoint contains more than just model weights:
+
+```text
+epoch
+best_score
+model_state_dict
+optimizer_state_dict
+model_config
+method
+fold
+metrics
+```
+
+The inference code primarily needs the trained model state and configuration.
+
+The configuration determines how the model architecture should be reconstructed.
+
+For example:
+
+```python
+unet_out_channels = 32
+unet_layers = [32, 64, 128]
+window_size = 2
+downsample = [1, 4, 4]
+```
+
+This is important because a PyTorch checkpoint is not necessarily self-describing enough to reconstruct the architecture safely.
+
+The accompanying:
+
+```text
+config.json
+```
+
+provides the explicit prediction-time configuration.
+
+---
+
+# 23. What the model actually learns
+
+It is useful to separate the learned components from the deterministic parts of the pipeline.
+
+## Learned
+
+The neural network learns:
+
+```text
+image
+  ↓
+U-Net representation
+  ↓
+cell detection signal
+
+and
+
+cell A representation
++
+cell B representation
++
+position information
+  ↓
+temporal compatibility score
+```
+
+## Deterministic
+
+The following are algorithmic choices rather than learned predictions:
+
+```text
+quantile normalization
+downsampling
+local-max detection
+detection threshold
+edge activation
+edge threshold
+parent/child limits
+coordinate rescaling
+graph construction
+optional ILP optimization
+```
+
+This distinction is particularly useful when debugging performance.
+
+If detections are poor, investigate the U-Net/detection stage.
+
+If detections are good but tracks are wrong, investigate the node features, transformer, edge probabilities, thresholds, and graph constraints.
+
+---
+
+# 24. End-to-end inference flow
+
+The actual `predict_video()` path can therefore be summarized as:
+
+```text
+1. Open Zarr
+       │
+2. Read scale + quantile metadata
+       │
+3. Choose temporal window
+       │
+4. Load frames
+       │
+5. Apply downsampling
+       │
+6. Apply quantile normalization
+       │
+7. Run TemporalUNet3D
+       │
+       ├──────────────► detection logits
+       │                       │
+       │                       ▼
+       │                 local-max pooling
+       │                       │
+       │                       ▼
+       │                  cell coordinates
+       │
+       └──────────────► U-Net feature maps
+                               │
+                               ▼
+                        sample at nodes
+                               │
+                               ▼
+                      positional features
+                               │
+                               ▼
+                       node transformer
+                               │
+                               ▼
+                       edge score matrix
+                               │
+                               ▼
+                         softmax/sigmoid
+                               │
+                               ▼
+                          thresholding
+                               │
+                               ▼
+                    parent/child constraints
+                               │
+                               ▼
+                         graph edges
+                               │
+                               ▼
+                         tracking graph
+                               │
+                               ▼
+                         optional ILP
+                               │
+                               ▼
+                            .geff
+```
+
+---
+
+# 25. The most important mental model
+
+The easiest way to understand this system is to think of it as three increasingly discrete representations.
+
+### Stage 1 — Image
+
+```text
+continuous 3D microscopy intensities
+```
+
+The U-Net operates here.
+
+### Stage 2 — Nodes
+
+```text
+(t, z, y, x)
+```
+
+The detector converts dense logits into candidate cell centers.
+
+### Stage 3 — Graph
+
+```text
+nodes + temporal edges
+```
+
+The transformer predicts relationships between those nodes, and the graph-building stage turns them into a tracking solution.
+
+So the full transformation is:
+
+```text
+IMAGE
+  │
+  │ Temporal U-Net
+  ▼
+DENSE FEATURES + DENSE DETECTION FIELD
+  │
+  │ local maxima
+  ▼
+CELL NODES
+  │
+  │ transformer
+  ▼
+PAIRWISE TEMPORAL SCORES
+  │
+  │ filtering / optimization
+  ▼
+TRACKING GRAPH
+```
+
+[Figure: Three-level conceptual illustration: dense image volume → discrete cell nodes → temporal graph, emphasizing the change from continuous representation to objects to relationships](assets/dense_to_cells_to_graph.png)
+
+---
+
+# 26. Repository structure
+
+The most relevant files are:
+
+```text
+repo/
+├── src/
+│   └── biohub_tracking/
+│       ├── io.py
+│       ├── img_proc.py
+│       ├── metrics.py
+│       ├── division_metrics.py
+│       │
+│       └── models/
+│           ├── temporal_unet.py
+│           └── simple_node_transformer.py
+│
+└── scripts/
+    ├── train_unet_transformer.py
+    ├── predict_unet_transformer.py
+    ├── evaluate.py
+    └── dataspec.py
+```
+
+The main conceptual responsibilities are:
+
+| File                          | Responsibility                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------------- |
+| `io.py`                       | Dataset loading, metadata, normalization, coordinate transformations, graph I/O |
+| `img_proc.py`                 | Image normalization, isotropic resampling, NMS and coordinate utilities         |
+| `temporal_unet.py`            | 3D temporal U-Net architecture                                                  |
+| `simple_node_transformer.py`  | Node/edge transformer components                                                |
+| `train_unet_transformer.py`   | Training pipeline and model assembly                                            |
+| `predict_unet_transformer.py` | End-to-end inference                                                            |
+| `evaluate.py`                 | Prediction evaluation                                                           |
+| `metrics.py`                  | Tracking metrics                                                                |
+| `division_metrics.py`         | Division-specific evaluation                                                    |
+
+---
+
+# 27. Current model configuration
+
+The supplied trained model uses:
+
+```text
+TemporalUNet3D
+├── input channels: 1
+├── U-Net output channels: 32
+├── U-Net layers: [32, 64, 128]
+├── spatial downsample: [1, 4, 4]
+├── temporal window: 2 frames
+└── detection pooling scale: physical-distance based
+```
+
+The downstream transformer operates on detected nodes using:
+
+```text
+U-Net features
++
+4D positional features
++
+source/target coordinates
+```
+
+and produces:
+
+```text
+source node × target node
+```
+
+edge logits.
+
+---
+
+# 28. Output
+
+For every processed dataset, the prediction pipeline produces a `.geff` file.
+
+The file represents a graph containing:
+
+```text
+Nodes:
+    time
+    z
+    y
+    x
+
+Edges:
+    source
+    target
+    edge probability
+    spatial distance
+```
+
+This graph is the final product of the neural tracking pipeline.
+
+It can then be evaluated using the repository's tracking metrics.
+
+The evaluation reports quantities such as:
+
+```text
+score
+edge_jaccard
+adj_edge_jaccard
+division_jaccard
+node_recall
+```
+
+These metrics allow us to separate different failure modes.
+
+For example:
+
+```text
+high node recall
++
+low edge Jaccard
+```
+
+suggests that the detector is finding cells reasonably well, but the temporal association is poor.
+
+Conversely:
+
+```text
+low node recall
+```
+
+points much earlier in the pipeline, because missing detections cannot be recovered by the edge predictor.
+
+---

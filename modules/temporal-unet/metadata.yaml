@@ -1,0 +1,48 @@
+
+title: "Temporal UNet"
+
+slug: "temporal-unet"
+
+module: ""
+
+status: seed
+
+difficulty: beginner
+
+created: "2026-08-08T15:21:37.027220"
+
+updated: false
+
+last_build: ""
+
+content_hash: ""
+
+tags: []
+
+related: []
+
+outputs:
+  quiz:
+    published: false
+
+  website:
+    published: false
+
+  youtube:
+    published: false
+    url: ""
+
+  instagram:
+      published: false
+      url: ""
+
+  blog:
+    published: false
+    url: ""
+
+  notebook:
+    published: false
+
+  simulation:
+    published: false
+    build: false

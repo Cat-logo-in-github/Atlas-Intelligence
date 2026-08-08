@@ -2,5 +2,5 @@
 
 ## Articles
 
-- [Gradient Descent](gradient-descent/gradient-descent-blog)
-- [RL Learning](rl-learning/rl-learning-blog)
+- [Biohub Kaggle competition pipeline](biohub-kaggle-competition-pipeline/biohub-kaggle-competition-pipeline-blog)
+- [Temporal UNet](temporal-unet/temporal-unet-blog)

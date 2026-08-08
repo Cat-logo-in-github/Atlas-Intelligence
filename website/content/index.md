@@ -2,5 +2,5 @@
 
 ## Modules
 
-- [Gradient Descent](gradient-descent/)
-- [RL Learning](rl-learning/)
+- [Biohub Kaggle competition pipeline](biohub-kaggle-competition-pipeline/)
+- [Temporal UNet](temporal-unet/)
